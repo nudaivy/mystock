@@ -4,7 +4,7 @@ import numpy as np
 import streamlit as st
 import plotly.graph_objects as go
 
-# --- 1. UI 深度适配：iOS 17 窄边框与交互 ---
+# --- 1. UI 深度适配：iOS 17 纯黑统一风格 ---
 st.set_page_config(page_title="Alpha Sniper Pro", layout="wide")
 st.markdown("""
     <style>
@@ -12,20 +12,41 @@ st.markdown("""
     
     /* 置顶持仓岛 */
     .portfolio-island {
-        background: linear-gradient(145deg, #1c1c1e, #000000);
-        border-radius: 20px; padding: 15px; margin-bottom: 20px;
-        border: 1px solid #3a3a3c; box-shadow: 0 4px 15px rgba(255,59,48,0.2);
+        background: #1C1C1E;
+        border-radius: 20px; padding: 20px; margin-bottom: 15px;
+        border: 1px solid #2C2C2E;
+    }
+
+    /* 灵动岛买入建议 */
+    .dynamic-island {
+        background: rgba(255, 59, 48, 0.15); backdrop-filter: blur(15px);
+        border-radius: 15px; padding: 12px; margin-bottom: 25px;
+        border: 1px solid rgba(255, 59, 48, 0.3); text-align: center;
+        color: #FF3B30; font-weight: 700; font-size: 14px;
+        box-shadow: 0 4px 15px rgba(255, 59, 48, 0.1);
+    }
+
+    /* 统一输入框背景色 */
+    .stTextInput>div>div>input, .stNumberInput>div>div>input {
+        background-color: #2C2C2E !important; 
+        color: #FFFFFF !important; 
+        border: 1px solid #3A3A3C !important;
+        border-radius: 10px !important;
+    }
+    
+    .stTextInput>div>div>input:focus, .stNumberInput>div>div>input:focus {
+        border-color: #FF3B30 !important;
+        box-shadow: 0 0 0 1px #FF3B30 !important;
     }
 
     .apple-card { 
         padding: 10px; border-radius: 12px; margin-bottom: 8px;
         background-color: #1C1C1E; border: 1px solid #2C2C2E;
-        min-height: 300px;
+        min-height: 310px;
     }
 
     .profit-hero { font-size: 26px; font-weight: 800; color: #FF3B30; margin: 2px 0; }
     
-    /* 概念描述 */
     .concept-box {
         font-size: 10px; color: #FF3B30; line-height: 1.3;
         margin-top: 8px; border-top: 0.5px solid #3A3A3C; padding-top: 8px;
@@ -37,40 +58,11 @@ st.markdown("""
 
     .buy-pill { background-color: #FF3B30; color: #FFF; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 800; }
 
-    /* 输入框样式 */
-    .stTextInput>div>div>input { background-color: #1c1c1e; color: white; border: 1px solid #3a3a3c; }
-    
     #MainMenu, footer, header, .stDeployButton { visibility: hidden; display: none; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. 持仓管理模块 ---
-if 'portfolio' not in st.session_state:
-    st.session_state.portfolio = {}
-
-with st.container():
-    st.markdown("<div class='portfolio-island'>", unsafe_allow_html=True)
-    st.markdown("### 💼 我的持仓看板")
-    p_col1, p_col2, p_col3 = st.columns([1, 1, 1])
-    with p_col1:
-        new_ticker = st.text_input("股票代码", placeholder="如: PLTR").upper()
-    with p_col2:
-        new_cost = st.number_input("成本价 ($)", min_value=0.0, step=0.01)
-    with p_col3:
-        if st.button("更新持仓"):
-            if new_ticker:
-                st.session_state.portfolio[new_ticker] = new_cost
-                st.success(f"{new_ticker} 已录入")
-    
-    # 显示已保存的持仓
-    if st.session_state.portfolio:
-        cols = st.columns(len(st.session_state.portfolio))
-        for i, (t, c) in enumerate(st.session_state.portfolio.items()):
-            with cols[i]:
-                st.markdown(f"**{t}** | 成本: `${c}`")
-    st.markdown("</div>", unsafe_allow_html=True)
-
-# --- 3. 策略引擎 ---
+# --- 2. 策略引擎 ---
 def run_strategy(df):
     df = df.copy()
     df['High_15'] = df['High'].rolling(15).max()
@@ -94,9 +86,35 @@ def run_strategy(df):
                 trades.append({'date': df.index[i], 'type': 'sell', 'price': p})
     return fund - 1, trades
 
-# --- 4. 核心渲染 ---
+# --- 3. 持仓管理模块 ---
+if 'portfolio' not in st.session_state:
+    st.session_state.portfolio = {}
+
+with st.container():
+    st.markdown("<div class='portfolio-island'>", unsafe_allow_html=True)
+    st.markdown("<h3 style='margin-top:0;'>💼 持仓与成本管理</h3>", unsafe_allow_html=True)
+    p_col1, p_col2, p_col3 = st.columns([1.5, 1.5, 1])
+    with p_col1:
+        new_ticker = st.text_input("代码 (Ticker)", placeholder="输入如 PLTR").upper()
+    with p_col2:
+        new_cost = st.number_input("持有成本 (Price)", min_value=0.0, step=0.01, format="%.2f")
+    with p_col3:
+        st.write("<div style='height:28px;'></div>", unsafe_allow_html=True)
+        if st.button("确认录入", use_container_width=True):
+            if new_ticker:
+                st.session_state.portfolio[new_ticker] = new_cost
+                st.toast(f"✅ {new_ticker} 录入成功")
+    
+    if st.session_state.portfolio:
+        st.markdown("<div style='display:flex; flex-wrap:wrap; gap:10px; margin-top:10px;'>", unsafe_allow_html=True)
+        for t, c in st.session_state.portfolio.items():
+            st.markdown(f"<div style='background:#2C2C2E; padding:4px 10px; border-radius:12px; border:1px solid #3A3A3C; font-size:11px;'><b>{t}</b> @ <span style='color:#FF3B30;'>${c}</span></div>", unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
+
+# --- 4. 数据处理与买入建议汇总 ---
 ticker_list = ["BTDR", "NIO", "RCAT", "KTOS", "ABSI", "TER", "LAES", "DVLT", "INO", "PLTR", "IONQ", "NVNI", "CLSK"]
-processed_data = []
+processed_data, buying_now = [], []
 
 for ticker in ticker_list:
     try:
@@ -107,20 +125,26 @@ for ticker in ticker_list:
         test_df = raw_data.tail(180)
         profit, trades = run_strategy(test_df)
         
+        is_odd = (len(trades) % 2 != 0)
+        if is_odd: buying_now.append(ticker)
+        
         processed_data.append({
             "ticker": ticker, "profit": profit, "trades": trades, 
-            "is_odd": (len(trades) % 2 != 0), "info": info, "df": test_df
+            "is_odd": is_odd, "info": info, "df": test_df
         })
     except: continue
 
+# --- 灵动岛建议栏 (置顶) ---
+if buying_now:
+    st.markdown(f"<div class='dynamic-island'>🏝️ 今日建议买入: {', '.join(buying_now)}</div>", unsafe_allow_html=True)
+
+# --- 5. 股票详情列表 ---
 for item in processed_data:
     with st.container():
         buy_label = "<span class='buy-pill'>BUY</span>" if item['is_odd'] else ""
         st.markdown(f"##### {item['ticker']} {buy_label}", unsafe_allow_html=True)
         
-        # 极窄侧边栏 (1:4 比例)
         col1, col2 = st.columns([1, 4])
-        
         with col1:
             st.markdown(f"""
                 <div class='apple-card'>
@@ -129,10 +153,10 @@ for item in processed_data:
                     <table class='f-table'>
                         <tr><td>概念分类</td><td class='f-val'>{item['info'].get('industry','N/A')}</td></tr>
                         <tr><td>营收增速</td><td class='f-val'>{item['info'].get('revenueGrowth',0)*100:.1f}%</td></tr>
-                        <tr><td>机构目标</td><td class='f-val' style='color:#FF3B30;'>${item['info'].get('targetMeanPrice','N/A')}</td></tr>
+                        <tr><td>机构目标价</td><td class='f-val' style='color:#FF3B30;'>${item['info'].get('targetMeanPrice','N/A')}</td></tr>
                     </table>
                     <div class='concept-box'>
-                        <b>核心概念/业务:</b><br>{item['info'].get('longBusinessSummary', '暂无描述')[:100]}...
+                        <b>核心业务:</b><br>{item['info'].get('longBusinessSummary', '暂无描述')[:100]}...
                     </div>
                 </div>
             """, unsafe_allow_html=True)
@@ -145,7 +169,6 @@ for item in processed_data:
                 increasing_fillcolor='#FF3B30', decreasing_fillcolor='#34C759'
             )])
             
-            # 标注买卖点
             for t in item['trades']:
                 is_buy = t['type'] == 'buy'
                 fig.add_trace(go.Scatter(
@@ -154,10 +177,10 @@ for item in processed_data:
                     text=["B" if is_buy else "S"], textposition="top center", showlegend=False
                 ))
 
-            # 如果该股在持仓中，画一条成本线
             if item['ticker'] in st.session_state.portfolio:
                 cost = st.session_state.portfolio[item['ticker']]
-                fig.add_hline(y=cost, line_dash="dash", line_color="white", annotation_text=f"我的成本: {cost}")
+                fig.add_hline(y=cost, line_dash="dash", line_color="#FFFFFF", line_width=1, 
+                              annotation_text=f"我的成本: {cost}", annotation_font_size=10)
 
             fig.update_layout(
                 template="plotly_dark", xaxis_rangeslider_visible=False,
@@ -166,6 +189,5 @@ for item in processed_data:
             )
             fig.update_yaxes(showgrid=False, side="right", tickfont=dict(size=10))
             fig.update_xaxes(showgrid=False, tickfont=dict(size=10))
-            
-            st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False}, key=f"v9_{item['ticker']}")
+            st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False}, key=f"v11_{item['ticker']}")
         st.divider()
