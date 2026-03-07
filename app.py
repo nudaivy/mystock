@@ -6,16 +6,14 @@ import plotly.graph_objects as go
 import json
 import os
 
-# --- 1. 核心性能：行情高速缓存 (TTL 60s) ---
+# --- 1. 性能优化：行情高速缓存 ---
 @st.cache_data(ttl=60)
 def fetch_master_data(tickers):
     data_dict = {}
     try:
-        # 抓取大盘基准 QQQ
         qqq = yf.Ticker("QQQ").history(period="5d")
         qqq_chg = ((qqq['Close'].iloc[-1] - qqq['Close'].iloc[-2]) / qqq['Close'].iloc[-2]) * 100
-    except:
-        qqq_chg = 0.0
+    except: qqq_chg = 0.0
 
     for ticker in tickers:
         try:
@@ -26,7 +24,7 @@ def fetch_master_data(tickers):
         except: continue
     return data_dict, qqq_chg
 
-# --- 2. 永久存储：持仓与价格记忆 ---
+# --- 2. 存储逻辑 ---
 DB_FILE = "portfolio_db.json"
 def load_db():
     if os.path.exists(DB_FILE):
@@ -39,36 +37,32 @@ def save_db(data):
 if 'portfolio' not in st.session_state:
     st.session_state.portfolio = load_db()
 
-# --- 3. UI 深度定制：iOS 17 黑暗动态风格 ---
+# --- 3. UI 定制 ---
 st.set_page_config(page_title="Alpha Sniper Pro", layout="wide")
 st.markdown("""
     <style>
     .main { background-color: #000000; color: #FFFFFF; }
     .portfolio-island { background: #1C1C1E; border-radius: 20px; padding: 20px; margin-bottom: 15px; border: 1px solid #2C2C2E; }
-    
-    /* 输入框统一背景 */
     div[data-baseweb="input"] { background-color: #2C2C2E !important; border-radius: 10px !important; }
     input { background-color: #2C2C2E !important; color: #FFFFFF !important; border: none !important; }
     .stTextInput>div>div, .stNumberInput>div>div { background-color: #2C2C2E !important; border: 1px solid #3A3A3C !important; border-radius: 10px !important; height: 45px !important; }
-
-    /* 呼吸感：大涨个股边框 */
     .card-hot { border: 1.5px solid rgba(255, 59, 48, 0.6) !important; box-shadow: 0 0 20px rgba(255, 59, 48, 0.2); }
-    
     .pnl-pill { padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 700; margin-left: 8px; border: 1px solid rgba(255,255,255,0.1); }
     .rs-tag { background: #3A3A3C; color: #AEAEB2; padding: 2px 8px; border-radius: 6px; font-size: 10px; margin-left: 8px; vertical-align: middle; }
     .rs-strong { color: #FF3B30; font-weight: 800; border: 0.5px solid #FF3B30; }
-
-    .apple-card { padding: 10px; border-radius: 12px; margin-bottom: 8px; background-color: #1C1C1E; border: 1px solid #2C2C2E; min-height: 320px; transition: all 0.3s ease; }
+    .dynamic-island { background: rgba(255, 59, 48, 0.15); border-radius: 15px; padding: 12px; margin-bottom: 25px; border: 1px solid rgba(255, 59, 48, 0.3); text-align: center; color: #FF3B30; font-weight: 700; font-size: 14px; }
+    .apple-card { padding: 10px; border-radius: 12px; margin-bottom: 8px; background-color: #1C1C1E; border: 1px solid #2C2C2E; min-height: 320px; }
     .profit-hero { font-size: 26px; font-weight: 800; color: #FF3B30; margin: 2px 0; }
     .concept-tag { display: inline-block; background: rgba(255, 59, 48, 0.1); color: #FF3B30; border: 0.5px solid #FF3B30; padding: 2px 8px; border-radius: 6px; font-size: 10px; font-weight: 600; margin: 2px; }
     .f-table { width: 100%; font-size: 10px; color: #AEAEB2; border-collapse: collapse; margin-top: 5px; }
     .f-table td { border-bottom: 0.5px solid #3A3A3C; padding: 4px 0; }
     .f-val { color: #FFFFFF; font-weight: 600; text-align: right; }
+    .buy-pill { background-color: #FF3B30; color: #FFF; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 800; }
     #MainMenu, footer, header, .stDeployButton { visibility: hidden; display: none; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 4. 智能概念与高级策略 ---
+# --- 4. 策略逻辑 ---
 def get_concepts(info):
     summary = info.get('longBusinessSummary', '').lower()
     mapping = {"AI算力": ["ai ", "computing", "gpu"], "数字资产": ["bitcoin", "crypto", "mining"], "大数据": ["big data", "analytics", "cloud"]}
@@ -96,92 +90,84 @@ def run_pro_strategy(df):
                 pos, fund = 0, fund * (p / b_price)
                 trades.append({'date': df.index[i], 'type': 'sell', 'price': p})
     
-    # 实时计算红色警报止损线
     current_atr = df['ATR'].iloc[-1]
     alert_line = max_p - current_atr * 2.2 if pos == 1 else None
-    return fund - 1, trades, alert_line
+    return fund - 1, trades, alert_line, pos == 1
 
-# --- 5. 持仓管理与永久保存 ---
+# --- 5. 持仓交互 ---
 with st.container():
     st.markdown("<div class='portfolio-island'>", unsafe_allow_html=True)
     st.markdown("<h3 style='margin-top:0;'>💼 永久资产看板</h3>", unsafe_allow_html=True)
     p_col1, p_col2, p_col3 = st.columns([1.5, 1.5, 1])
-    with p_col1: new_ticker = st.text_input("代码", placeholder="BTDR").upper()
+    with p_col1: new_ticker = st.text_input("代码", placeholder="如 BTDR").upper()
     with p_col2: new_cost = st.number_input("持有成本", min_value=0.0, step=0.01, format="%.2f")
     with p_col3:
         st.write("<div style='height:28px;'></div>", unsafe_allow_html=True)
         if st.button("保存持仓", use_container_width=True):
             if new_ticker:
                 st.session_state.portfolio[new_ticker] = new_cost
-                save_db(st.session_state.portfolio)
-                st.rerun()
+                save_db(st.session_state.portfolio); st.rerun()
     if st.button("清空所有记录", type="secondary"):
         st.session_state.portfolio = {}; save_db({}); st.rerun()
     st.markdown("</div>", unsafe_allow_html=True)
 
-# --- 6. 数据处理循环 ---
+# --- 6. 数据与显示循环 ---
 ticker_list = ["BTDR", "NIO", "RCAT", "KTOS", "ABSI", "TER", "LAES", "DVLT", "INO", "PLTR", "IONQ", "NVNI", "CLSK"]
 all_data, qqq_chg = fetch_master_data(ticker_list)
-processed_results, portfolio_display = [], []
+processed_results, portfolio_display, buying_now = [], [], []
 
 for ticker, data in all_data.items():
     df, info = data['df'], data['info']
     curr_p = df['Close'].iloc[-1]
     day_chg = ((curr_p - df['Close'].iloc[-2]) / df['Close'].iloc[-2]) * 100
-    profit, trades, alert_line = run_pro_strategy(df)
+    profit, trades, alert_line, is_buying_status = run_pro_strategy(df)
     
-    # 计算 RS 强弱标签
+    if is_buying_status: buying_now.append(ticker) # 灵动岛逻辑
+    
     rs_val = day_chg - qqq_chg
     rs_class = "rs-strong" if rs_val > 0 else ""
 
-    # 处理顶部动态标签 (永久保存后的盈亏)
     if ticker in st.session_state.portfolio:
         cost = st.session_state.portfolio[ticker]
         pnl_p = ((curr_p - cost) / cost) * 100
         pnl_v = curr_p - cost
         clr = "#FF3B30" if pnl_p >= 0 else "#34C759"
-        portfolio_display.append(f"""
-            <div style='background:#2C2C2E; padding:8px 15px; border-radius:15px; border:1px solid #3A3A3C; margin-bottom:10px; display:inline-block; margin-right:10px;'>
-                <b>{ticker}</b> <span style='color:#8E8E93;'>@{cost}</span>
-                <span class='pnl-pill' style='background:{clr}22; color:{clr};'>{pnl_p:+.2f}% (${pnl_v:+.2f})</span>
-            </div>
-        """)
+        portfolio_display.append(f"<div style='background:#2C2C2E; padding:8px 15px; border-radius:15px; border:1px solid #3A3A3C; margin-bottom:10px; display:inline-block; margin-right:10px;'><b>{ticker}</b> <span style='color:#8E8E93;'>@{cost}</span><span class='pnl-pill' style='background:{clr}22; color:{clr};'>{pnl_p:+.2f}%</span></div>")
 
     processed_results.append({
         "ticker": ticker, "profit": profit, "trades": trades, "day_chg": day_chg,
         "info": info, "df": df.tail(120), "curr_p": curr_p, "alert": alert_line,
-        "concepts": get_concepts(info), "rs": rs_val, "rs_class": rs_class
+        "concepts": get_concepts(info), "rs": rs_val, "rs_class": rs_class, "is_buy_label": is_buying_status
     })
 
-# 顶部渲染
+# 渲染顶部信息
 if portfolio_display: st.markdown(f"<div>{''.join(portfolio_display)}</div>", unsafe_allow_html=True)
+if buying_now:
+    st.markdown(f"<div class='dynamic-island'>🏝️ 今日建议买入清单: {', '.join(buying_now)}</div>", unsafe_allow_html=True)
 
-# --- 7. 列表渲染 ---
+# 列表渲染
 for item in processed_results:
     with st.container():
-        st.markdown(f"##### {item['ticker']} <span class='rs-tag {item['rs_class']}'>RS: {item['rs']:+.1f}%</span>", unsafe_allow_html=True)
+        buy_badge = "<span class='buy-pill'>BUY</span>" if item['is_buy_label'] else ""
+        st.markdown(f"##### {item['ticker']} {buy_badge} <span class='rs-tag {item['rs_class']}'>RS: {item['rs']:+.1f}%</span>", unsafe_allow_html=True)
         col1, col2 = st.columns([1, 4])
         with col1:
             hot_style = "card-hot" if item['day_chg'] > 5 else ""
-            tags = "".join([f"<span class='concept-tag'>{c}</span>" for c in item['concepts']])
-            st.markdown(f"""
-                <div class='apple-card {hot_style}'>
-                    <div style='color:#8E8E93; font-size:10px;'>180D策略收益</div>
-                    <div class='profit-hero'>{item['profit']*100:.1f}%</div>
-                    <div style='margin: 8px 0;'>{tags}</div>
-                    <table class='f-table'>
-                        <tr><td>最新价格</td><td class='f-val'>${item['curr_p']:.2f}</td></tr>
-                        <tr><td>今日涨跌</td><td class='f-val' style='color:{"#FF3B30" if item['day_chg']>=0 else "#34C759"};'>{item['day_chg']:+.2f}%</td></tr>
-                        <tr><td>风险警报线</td><td class='f-val' style='color:#FF3B30;'>{f"${item['alert']:.2f}" if item['alert'] else "N/A"}</td></tr>
-                    </table>
-                </div>
-            """, unsafe_allow_html=True)
+            st.markdown(f"<div class='apple-card {hot_style}'><div style='color:#8E8E93; font-size:10px;'>180D策略收益</div><div class='profit-hero'>{item['profit']*100:.1f}%</div><div style='margin: 8px 0;'>{''.join([f'<span class="concept-tag">{c}</span>' for c in item['concepts']])}</div><table class='f-table'><tr><td>最新价格</td><td class='f-val'>${item['curr_p']:.2f}</td></tr><tr><td>今日涨跌</td><td class='f-val' style='color:{'#FF3B30' if item['day_chg']>=0 else '#34C759'};'>{item['day_chg']:+.2f}%</td></tr><tr><td>风险警报线</td><td class='f-val' style='color:#FF3B30;'>{f'${item['alert']:.2f}' if item['alert'] else 'N/A'}</td></tr></table></div>", unsafe_allow_html=True)
         with col2:
             fig = go.Figure(data=[go.Candlestick(x=item['df'].index, open=item['df']['Open'], high=item['df']['High'], low=item['df']['Low'], close=item['df']['Close'], increasing_line_color='#FF3B30', decreasing_line_color='#34C759', increasing_fillcolor='#FF3B30', decreasing_fillcolor='#34C759')])
-            if item['alert']:
-                fig.add_hline(y=item['alert'], line_dash="dot", line_color="#FF3B30", line_width=2, annotation_text="止损线", annotation_position="bottom left")
+            
+            # --- 核心修复：绘制 B/S 买卖信号点 ---
+            df_tail = item['df']
+            for t in item['trades']:
+                if t['date'] in df_tail.index:
+                    is_buy = t['type'] == 'buy'
+                    fig.add_trace(go.Scatter(x=[t['date']], y=[t['price']], mode='markers+text', marker=dict(symbol="triangle-up" if is_buy else "triangle-down", size=12, color="#FF3B30" if is_buy else "#34C759"), text=["B" if is_buy else "S"], textposition="top center", showlegend=False))
+            
+            if item['alert']: fig.add_hline(y=item['alert'], line_dash="dot", line_color="#FF3B30", line_width=2)
             if item['ticker'] in st.session_state.portfolio:
-                fig.add_hline(y=st.session_state.portfolio[item['ticker']], line_dash="dash", line_color="#FFFFFF", line_width=1, annotation_text="成本")
+                fig.add_hline(y=st.session_state.portfolio[item['ticker']], line_dash="dash", line_color="#FFFFFF", line_width=1)
+            
             fig.update_layout(template="plotly_dark", xaxis_rangeslider_visible=False, height=320, margin=dict(l=0, r=0, t=10, b=0), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
             st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False}, key=f"v_final_{item['ticker']}")
         st.divider()
