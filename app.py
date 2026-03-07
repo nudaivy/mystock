@@ -4,32 +4,29 @@ import numpy as np
 import streamlit as st
 import plotly.graph_objects as go
 
-# --- 1. UI 深度适配 ---
+# --- 1. UI 深度适配：iOS 17 极致统一视觉 ---
 st.set_page_config(page_title="Alpha Sniper Pro", layout="wide")
 st.markdown("""
     <style>
     .main { background-color: #000000; color: #FFFFFF; }
     .portfolio-island { background: #1C1C1E; border-radius: 20px; padding: 20px; margin-bottom: 15px; border: 1px solid #2C2C2E; }
+    div[data-baseweb="input"] { background-color: #2C2C2E !important; border-radius: 10px !important; }
+    input { background-color: #2C2C2E !important; color: #FFFFFF !important; border: none !important; font-family: -apple-system, sans-serif !important; }
+    .stTextInput>div>div, .stNumberInput>div>div { background-color: #2C2C2E !important; border: 1px solid #3A3A3C !important; border-radius: 10px !important; height: 45px !important; }
     .dynamic-island {
         background: rgba(255, 59, 48, 0.15); backdrop-filter: blur(15px);
         border-radius: 15px; padding: 12px; margin-bottom: 25px;
         border: 1px solid rgba(255, 59, 48, 0.3); text-align: center;
         color: #FF3B30; font-weight: 700; font-size: 14px;
     }
-    .stTextInput>div>div>input, .stNumberInput>div>div>input {
-        background-color: #2C2C2E !important; color: #FFFFFF !important; 
-        border: 1px solid #3A3A3C !important; border-radius: 10px !important;
-    }
-    .apple-card { padding: 10px; border-radius: 12px; margin-bottom: 8px; background-color: #1C1C1E; border: 1px solid #2C2C2E; min-height: 320px; }
+    .apple-card { padding: 10px; border-radius: 12px; margin-bottom: 8px; background-color: #1C1C1E; border: 1px solid #2C2C2E; min-height: 340px; }
     .profit-hero { font-size: 26px; font-weight: 800; color: #FF3B30; margin: 2px 0; }
-    
-    /* 标签样式优化 */
+    .pnl-box { font-size: 20px; font-weight: 700; margin-top: 5px; }
     .concept-tag {
         display: inline-block; background: rgba(255, 59, 48, 0.1);
         color: #FF3B30; border: 0.5px solid #FF3B30;
         padding: 2px 8px; border-radius: 6px; font-size: 10px; font-weight: 600; margin: 2px;
     }
-
     .f-table { width: 100%; font-size: 10px; color: #AEAEB2; border-collapse: collapse; margin-top: 5px; }
     .f-table td { border-bottom: 0.5px solid #3A3A3C; padding: 4px 0; }
     .f-val { color: #FFFFFF; font-weight: 600; text-align: right; }
@@ -38,34 +35,25 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. 智能概念识别函数 ---
+# --- 2. 核心函数 ---
 def get_detailed_concepts(info):
     summary = info.get('longBusinessSummary', '').lower()
     industry = info.get('industry', '').lower()
     concepts = []
-    
-    # 定义核心关键词映射
     mapping = {
         "AI算力": ["artificial intelligence", " ai ", "computing", "gpu", "data center", "hpc"],
         "数字资产": ["bitcoin", "crypto", "digital asset", "mining", "blockchain"],
         "大数据": ["big data", "analytics", "software as a service", "data solution", "cloud"],
         "国防科技": ["defense", "aerospace", "military", "weapon", "national security"],
         "新能源": ["electric vehicle", "battery", "solar", "renewable", "clean energy"],
-        "半导体": ["semiconductor", " chip ", "foundry", "wafer"],
-        "生物医药": ["biopharmaceutical", "biotech", "drug", "clinical", "therapy"]
+        "半导体": ["semiconductor", " chip ", "foundry", "wafer"]
     }
-    
     for label, keys in mapping.items():
         if any(k in summary or k in industry for k in keys):
             concepts.append(label)
-    
-    # 默认兜底
-    if not concepts:
-        concepts.append(info.get('sector', '科技成长'))
-    
-    return concepts[:4] # 最多显示4个核心概念
+    if not concepts: concepts.append(info.get('sector', '科技成长'))
+    return concepts[:4]
 
-# --- 3. 策略引擎 (保持不变) ---
 def run_strategy(df):
     df = df.copy()
     df['High_15'] = df['High'].rolling(15).max()
@@ -88,16 +76,16 @@ def run_strategy(df):
                 trades.append({'date': df.index[i], 'type': 'sell', 'price': p})
     return fund - 1, trades
 
-# --- 4. 持仓管理 ---
+# --- 3. 持仓管理交互 ---
 if 'portfolio' not in st.session_state:
     st.session_state.portfolio = {}
 
 with st.container():
     st.markdown("<div class='portfolio-island'>", unsafe_allow_html=True)
-    st.markdown("<h3 style='margin-top:0;'>💼 持仓与成本管理</h3>", unsafe_allow_html=True)
+    st.markdown("<h3 style='margin-top:0;'>💼 持仓盈亏实时计算</h3>", unsafe_allow_html=True)
     p_col1, p_col2, p_col3 = st.columns([1.5, 1.5, 1])
     with p_col1:
-        new_ticker = st.text_input("代码 (Ticker)", placeholder="输入如 BTDR").upper()
+        new_ticker = st.text_input("代码 (Ticker)", placeholder="如 BTDR").upper()
     with p_col2:
         new_cost = st.number_input("持有成本 (Price)", min_value=0.0, step=0.01, format="%.2f")
     with p_col3:
@@ -108,7 +96,7 @@ with st.container():
                 st.toast(f"✅ {new_ticker} 录入成功")
     st.markdown("</div>", unsafe_allow_html=True)
 
-# --- 5. 数据抓取与汇总 ---
+# --- 4. 数据处理 ---
 ticker_list = ["BTDR", "NIO", "RCAT", "KTOS", "ABSI", "TER", "LAES", "DVLT", "INO", "PLTR", "IONQ", "NVNI", "CLSK"]
 processed_data, buying_now = [], []
 
@@ -117,29 +105,48 @@ for ticker in ticker_list:
         t_obj = yf.Ticker(ticker)
         raw_data = t_obj.history(period="1y")
         if raw_data.empty: continue
+        current_price = raw_data['Close'].iloc[-1]
         info = t_obj.info
         test_df = raw_data.tail(180)
         profit, trades = run_strategy(test_df)
         is_odd = (len(trades) % 2 != 0)
         if is_odd: buying_now.append(ticker)
+        
+        # 计算持仓盈亏
+        pnl_val, pnl_pct = None, None
+        if ticker in st.session_state.portfolio:
+            cost = st.session_state.portfolio[ticker]
+            pnl_val = current_price - cost
+            pnl_pct = (pnl_val / cost) * 100
+
         processed_data.append({
             "ticker": ticker, "profit": profit, "trades": trades, 
-            "is_odd": is_odd, "info": info, "df": test_df,
-            "concepts": get_detailed_concepts(info)
+            "is_odd": is_odd, "info": info, "df": test_df, "current_price": current_price,
+            "concepts": get_detailed_concepts(info), "pnl_val": pnl_val, "pnl_pct": pnl_pct
         })
     except: continue
 
 if buying_now:
     st.markdown(f"<div class='dynamic-island'>🏝️ 今日建议买入: {', '.join(buying_now)}</div>", unsafe_allow_html=True)
 
-# --- 6. 列表渲染 ---
+# --- 5. 列表渲染 ---
 for item in processed_data:
     with st.container():
         buy_label = "<span class='buy-pill'>BUY</span>" if item['is_odd'] else ""
         st.markdown(f"##### {item['ticker']} {buy_label}", unsafe_allow_html=True)
         col1, col2 = st.columns([1, 4])
         with col1:
-            # 渲染概念标签
+            # 盈亏显示逻辑
+            pnl_display = ""
+            if item['pnl_val'] is not None:
+                color = "#FF3B30" if item['pnl_val'] >= 0 else "#34C759"
+                sign = "+" if item['pnl_val'] >= 0 else ""
+                pnl_display = f"""
+                    <div style='color:#8E8E93; font-size:10px; margin-top:10px;'>实时持仓盈亏</div>
+                    <div class='pnl-box' style='color:{color};'>{sign}{item['pnl_pct']:.2f}%</div>
+                    <div style='color:{color}; font-size:12px;'>${sign}{item['pnl_val']:.2f}</div>
+                """
+            
             concept_html = "".join([f"<span class='concept-tag'>{c}</span>" for c in item['concepts']])
             st.markdown(f"""
                 <div class='apple-card'>
@@ -147,10 +154,11 @@ for item in processed_data:
                     <div class='profit-hero'>{item['profit']*100:.1f}%</div>
                     <div style='margin: 5px 0;'>{concept_html}</div>
                     <table class='f-table'>
+                        <tr><td>现价</td><td class='f-val'>${item['current_price']:.2f}</td></tr>
                         <tr><td>营收增速</td><td class='f-val'>{item['info'].get('revenueGrowth',0)*100:.1f}%</td></tr>
-                        <tr><td>自由现金流</td><td class='f-val'>${item['info'].get('freeCashflow',0)/1e6:.1f}M</td></tr>
-                        <tr><td>机构目标价</td><td class='f-val' style='color:#FF3B30;'>${item['info'].get('targetMeanPrice','N/A')}</td></tr>
+                        <tr><td>目标价</td><td class='f-val' style='color:#FF3B30;'>${item['info'].get('targetMeanPrice','N/A')}</td></tr>
                     </table>
+                    {pnl_display}
                 </div>
             """, unsafe_allow_html=True)
 
@@ -163,16 +171,16 @@ for item in processed_data:
             )])
             for t in item['trades']:
                 is_buy = t['type'] == 'buy'
-                fig.add_trace(go.Scatter(
-                    x=[t['date']], y=[t['price']], mode='markers+text',
+                fig.add_trace(go.Scatter(x=[t['date']], y=[t['price']], mode='markers+text',
                     marker=dict(symbol="triangle-up" if is_buy else "triangle-down", size=10, color="#FF3B30" if is_buy else "#34C759"),
-                    text=["B" if is_buy else "S"], textposition="top center", showlegend=False
-                ))
+                    text=["B" if is_buy else "S"], textposition="top center", showlegend=False))
+            
             if item['ticker'] in st.session_state.portfolio:
                 cost = st.session_state.portfolio[item['ticker']]
                 fig.add_hline(y=cost, line_dash="dash", line_color="#FFFFFF", line_width=1, annotation_text=f"持仓: {cost}", annotation_font_size=10)
-            fig.update_layout(template="plotly_dark", xaxis_rangeslider_visible=False, height=320, margin=dict(l=0, r=0, t=10, b=0), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', showlegend=False)
+            
+            fig.update_layout(template="plotly_dark", xaxis_rangeslider_visible=False, height=340, margin=dict(l=0, r=0, t=10, b=0), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', showlegend=False)
             fig.update_yaxes(showgrid=False, side="right", tickfont=dict(size=10))
             fig.update_xaxes(showgrid=False, tickfont=dict(size=10))
-            st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False}, key=f"v12_{item['ticker']}")
+            st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False}, key=f"v14_{item['ticker']}")
         st.divider()
