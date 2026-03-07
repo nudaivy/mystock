@@ -6,33 +6,43 @@ import plotly.graph_objects as go
 import json
 import os
 
-# --- 1. 永久化存储逻辑 ---
+# --- 1. 永久存储核心逻辑 ---
 DB_FILE = "portfolio_db.json"
 
-def load_data():
+def load_stored_data():
+    """从本地文件读取已保存的持仓数据"""
     if os.path.exists(DB_FILE):
-        with open(DB_FILE, "r") as f:
-            return json.load(f)
+        try:
+            with open(DB_FILE, "r") as f:
+                return json.load(f)
+        except:
+            return {}
     return {}
 
-def save_data(data):
+def save_stored_data(data):
+    """将持仓数据永久保存到本地文件"""
     with open(DB_FILE, "w") as f:
         json.dump(data, f)
 
-# 初始化数据
+# 初始化：优先从本地文件加载，若没有则为空字典
 if 'portfolio' not in st.session_state:
-    st.session_state.portfolio = load_data()
+    st.session_state.portfolio = load_stored_data()
 
-# --- 2. UI 深度适配 ---
+# --- 2. UI 极致适配 ---
 st.set_page_config(page_title="Alpha Sniper Pro", layout="wide")
 st.markdown("""
     <style>
     .main { background-color: #000000; color: #FFFFFF; }
     .portfolio-island { background: #1C1C1E; border-radius: 20px; padding: 20px; margin-bottom: 15px; border: 1px solid #2C2C2E; }
+    
+    /* 统一输入框背景色 */
     div[data-baseweb="input"] { background-color: #2C2C2E !important; border-radius: 10px !important; }
     input { background-color: #2C2C2E !important; color: #FFFFFF !important; border: none !important; }
     .stTextInput>div>div, .stNumberInput>div>div { background-color: #2C2C2E !important; border: 1px solid #3A3A3C !important; border-radius: 10px !important; height: 45px !important; }
+
+    /* 盈亏标签样式 */
     .pnl-pill { padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 700; margin-left: 8px; border: 1px solid rgba(255,255,255,0.1); }
+    
     .dynamic-island { background: rgba(255, 59, 48, 0.15); backdrop-filter: blur(15px); border-radius: 15px; padding: 12px; margin-bottom: 25px; border: 1px solid rgba(255, 59, 48, 0.3); text-align: center; color: #FF3B30; font-weight: 700; font-size: 14px; }
     .apple-card { padding: 10px; border-radius: 12px; margin-bottom: 8px; background-color: #1C1C1E; border: 1px solid #2C2C2E; min-height: 280px; }
     .profit-hero { font-size: 26px; font-weight: 800; color: #FF3B30; margin: 2px 0; }
@@ -45,7 +55,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 3. 核心功能逻辑 (策略等) ---
+# --- 3. 策略引擎与概念识别 ---
 def get_detailed_concepts(info):
     summary = info.get('longBusinessSummary', '').lower()
     industry = info.get('industry', '').lower()
@@ -58,7 +68,9 @@ def get_detailed_concepts(info):
 def run_strategy(df):
     df = df.copy()
     df['High_15'] = df['High'].rolling(15).max()
-    delta, gain, loss = df['Close'].diff(), (df['Close'].diff().where(df['Close'].diff() > 0, 0)).rolling(14).mean(), (-df['Close'].diff().where(df['Close'].diff() < 0, 0)).rolling(14).mean()
+    delta = df['Close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
     df['RSI'] = 100 - (100 / (1 + (gain / loss.replace(0, 0.001))))
     df['ATR'] = pd.concat([(df['High']-df['Low']), (df['High']-df['Close'].shift()).abs(), (df['Low']-df['Close'].shift()).abs()], axis=1).max(axis=1).rolling(14).mean()
     fund, pos, b_price, max_p, trades = 1.0, 0, 0.0, 0.0, []
@@ -77,26 +89,28 @@ def run_strategy(df):
 # --- 4. 持仓录入交互 ---
 with st.container():
     st.markdown("<div class='portfolio-island'>", unsafe_allow_html=True)
-    st.markdown("<h3 style='margin-top:0;'>💼 永久持仓看板</h3>", unsafe_allow_html=True)
+    st.markdown("<h3 style='margin-top:0;'>💼 永久资产看板</h3>", unsafe_allow_html=True)
     p_col1, p_col2, p_col3 = st.columns([1.5, 1.5, 1])
-    with p_col1: new_ticker = st.text_input("代码", placeholder="BTDR").upper()
-    with p_col2: new_cost = st.number_input("成本", min_value=0.0, step=0.01, format="%.2f")
+    with p_col1:
+        new_ticker = st.text_input("代码", placeholder="如 BTDR").upper()
+    with p_col2:
+        new_cost = st.number_input("持有成本", min_value=0.0, step=0.01, format="%.2f")
     with p_col3:
         st.write("<div style='height:28px;'></div>", unsafe_allow_html=True)
         if st.button("保存并更新", use_container_width=True):
             if new_ticker:
                 st.session_state.portfolio[new_ticker] = new_cost
-                save_data(st.session_state.portfolio) # 写入文件
-                st.toast(f"✅ {new_ticker} 已永久保存")
+                save_stored_data(st.session_state.portfolio) # 保存到本地文件
+                st.toast(f"✅ {new_ticker} 数据已永久保存")
+                st.rerun()
     
-    # 增加清除按钮
-    if st.button("清空所有记录", type="secondary"):
+    if st.button("清空所有持仓记录", type="secondary"):
         st.session_state.portfolio = {}
-        save_data({})
+        save_stored_data({}) # 清空文件
         st.rerun()
     st.markdown("</div>", unsafe_allow_html=True)
 
-# --- 5. 数据显示逻辑 ---
+# --- 5. 实时盈亏展示与渲染 ---
 ticker_list = ["BTDR", "NIO", "RCAT", "KTOS", "ABSI", "TER", "LAES", "DVLT", "INO", "PLTR", "IONQ", "NVNI", "CLSK"]
 processed_data, buying_now, portfolio_display = [], [], []
 
@@ -110,6 +124,7 @@ for ticker in ticker_list:
         is_odd = (len(trades) % 2 != 0)
         if is_odd: buying_now.append(ticker)
         
+        # 处理顶部永久盈亏标签
         if ticker in st.session_state.portfolio:
             cost = st.session_state.portfolio[ticker]
             pnl_p = ((curr_p - cost) / cost) * 100
@@ -131,11 +146,13 @@ for ticker in ticker_list:
         })
     except: continue
 
+# 渲染顶部信息
 if portfolio_display:
     st.markdown(f"<div style='margin-bottom:20px;'>{''.join(portfolio_display)}</div>", unsafe_allow_html=True)
 if buying_now:
-    st.markdown(f"<div class='dynamic-island'>🏝️ 建议买入清单: {', '.join(buying_now)}</div>", unsafe_allow_html=True)
+    st.markdown(f"<div class='dynamic-island'>🏝️ 今日建议买入: {', '.join(buying_now)}</div>", unsafe_allow_html=True)
 
+# 列表渲染
 for item in processed_data:
     with st.container():
         buy_label = "<span class='buy-pill'>BUY</span>" if item['is_odd'] else ""
